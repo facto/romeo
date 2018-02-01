@@ -19,7 +19,7 @@ defmodule Romeo.Transports.TCP do
   import Kernel, except: [send: 2]
 
   @spec connect(Keyword.t) :: {:ok, state} | {:error, any}
-  def connect(%Conn{host: host, port: port, socket_opts: socket_opts, legacy_tls: tls} = conn) do
+  def connect(%Conn{host: host, port: port, socket_opts: socket_opts, legacy_tls: tls, logger_mod: logger_mod} = conn) do
     host = (host || host(conn.jid)) |> to_charlist()
     port = (port || @default_port)
 
@@ -27,7 +27,7 @@ defmodule Romeo.Transports.TCP do
 
     case :gen_tcp.connect(host, port, socket_opts ++ @socket_opts, conn.timeout) do
       {:ok, socket} ->
-        Logger.info fn -> "Established connection to #{host}" end
+        logger_mod.info fn -> "Established connection to #{host}" end
         parser = :fxml_stream.new(self(), :infinity, [:no_gen_server])
         conn = %{conn | parser: parser, socket: {:gen_tcp, socket}}
         conn = if tls, do: upgrade_to_tls(conn), else: conn
@@ -93,13 +93,13 @@ defmodule Romeo.Transports.TCP do
   end
   defp maybe_start_tls(%Conn{} = conn), do: conn
 
-  defp upgrade_to_tls(%Conn{parser: parser, socket: {:gen_tcp, socket}} = conn) do
-    Logger.info fn -> "Negotiating secure connection" end
+  defp upgrade_to_tls(%Conn{parser: parser, socket: {:gen_tcp, socket}, logger_mod: logger_mod} = conn) do
+    logger_mod.info fn -> "Negotiating secure connection" end
 
     {:ok, socket} = :ssl.connect(socket, conn.ssl_opts ++ @ssl_opts)
     parser = :fxml_stream.reset(parser)
 
-    Logger.info fn -> "Connection successfully secured" end
+    logger_mod.info fn -> "Connection successfully secured" end
     %{conn | socket: {:ssl, socket}, parser: parser}
   end
 
@@ -115,7 +115,7 @@ defmodule Romeo.Transports.TCP do
     Romeo.Auth.handshake!(conn)
   end
 
-  defp bind(%Conn{owner: owner, resource: resource} = conn) do
+  defp bind(%Conn{owner: owner, resource: resource, logger_mod: logger_mod} = conn) do
     stanza = Romeo.Stanza.bind(resource)
     id = Romeo.XML.attr(stanza, "id")
 
@@ -132,13 +132,13 @@ defmodule Romeo.Transports.TCP do
         |> Romeo.XML.cdata
         |> Romeo.JID.parse
 
-      Logger.info fn -> "Bound to resource: #{resource}" end
+      logger_mod.info fn -> "Bound to resource: #{resource}" end
       Kernel.send(owner, {:resource_bound, resource})
       %{conn | resource: resource}
     end)
   end
 
-  defp session(%Conn{} = conn) do
+  defp session(%Conn{logger_mod: logger_mod} = conn) do
     stanza = Romeo.Stanza.session
     id = Romeo.XML.attr(stanza, "id")
 
@@ -148,7 +148,7 @@ defmodule Romeo.Transports.TCP do
       "result" = Romeo.XML.attr(stanza, "type")
       ^id = Romeo.XML.attr(stanza, "id")
 
-      Logger.info fn -> "Session established" end
+      logger_mod.info fn -> "Session established" end
       conn
     end)
   end
@@ -163,8 +163,8 @@ defmodule Romeo.Transports.TCP do
     %{conn | parser: parser}
   end
 
-  defp parse_data(%Conn{jid: jid, parser: parser} = conn, data) do
-    Logger.debug fn -> "[#{jid}][INCOMING] #{inspect data}" end
+  defp parse_data(%Conn{jid: jid, parser: parser, logger_mod: logger_mod} = conn, data) do
+    logger_mod.debug fn -> "[#{jid}][INCOMING] #{inspect data}" end
 
     parser = :fxml_stream.parse(parser, data)
 
@@ -190,9 +190,9 @@ defmodule Romeo.Transports.TCP do
     end
   end
 
-  def send(%Conn{jid: jid, socket: {mod, socket}} = conn, stanza) do
+  def send(%Conn{jid: jid, socket: {mod, socket}, logger_mod: logger_mod} = conn, stanza) do
     stanza = Romeo.XML.encode!(stanza)
-    Logger.debug fn -> "[#{jid}][OUTGOING] #{inspect stanza}" end
+    logger_mod.debug fn -> "[#{jid}][OUTGOING] #{inspect stanza}" end
     :ok = mod.send(socket, stanza)
     {:ok, conn}
   end

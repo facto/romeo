@@ -1,8 +1,11 @@
 defmodule Romeo.Connection do
   @moduledoc false
 
+  require Logger
+
   @timeout 5_000
   @default_transport Romeo.Transports.TCP
+  @default_logger_mod Logger
 
   alias Romeo.Connection.Features
 
@@ -11,6 +14,7 @@ defmodule Romeo.Connection do
             host: nil,
             jid: nil,
             legacy_tls: false,
+            logger_mod: nil,
             nickname: "",
             owner: nil,
             parser: nil,
@@ -28,8 +32,6 @@ defmodule Romeo.Connection do
             transport: nil
 
   use Connection
-
-  require Logger
 
   ### PUBLIC API ###
 
@@ -56,6 +58,7 @@ defmodule Romeo.Connection do
       args
       |> Keyword.put_new(:timeout, @timeout)
       |> Keyword.put_new(:transport, @default_transport)
+      |> Keyword.put_new(:logger_mod, @default_logger_mod)
       |> Keyword.put(:owner, self())
 
     Connection.start_link(__MODULE__, struct(__MODULE__, args), options)
@@ -120,7 +123,7 @@ defmodule Romeo.Connection do
     {:reply, :ok, conn}
   end
 
-  def handle_info(info, %{owner: owner, transport: transport} = conn) do
+  def handle_info(info, %{owner: owner, transport: transport, logger_mod: logger_mod} = conn) do
     case transport.handle_message(info, conn) do
       {:ok, conn, :more} ->
         {:noreply, conn}
@@ -131,7 +134,7 @@ defmodule Romeo.Connection do
       {:error, _} = error ->
         {:disconnect, error, conn}
       :unknown ->
-        Logger.debug fn ->
+        logger_mod.debug fn ->
           [inspect(__MODULE__), ?\s, inspect(self()), " received message: " | inspect(info)]
         end
         {:noreply, conn}
