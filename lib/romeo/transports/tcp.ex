@@ -164,7 +164,7 @@ defmodule Romeo.Transports.TCP do
   end
 
   defp parse_data(%Conn{jid: jid, parser: parser, logger_mod: logger_mod} = conn, data) do
-    logger_mod.debug fn -> "[#{jid}][INCOMING] #{inspect data}" end
+    logger_mod.info fn -> "[#{jid}][INCOMING] #{inspect data}" end
 
     parser = :fxml_stream.parse(parser, data)
 
@@ -192,7 +192,7 @@ defmodule Romeo.Transports.TCP do
 
   def send(%Conn{jid: jid, socket: {mod, socket}, logger_mod: logger_mod} = conn, stanza) do
     stanza = Romeo.XML.encode!(stanza)
-    logger_mod.debug fn -> "[#{jid}][OUTGOING] #{inspect stanza}" end
+    logger_mod.info fn -> "[#{jid}][OUTGOING] #{inspect stanza}" end
     :ok = mod.send(socket, stanza)
     {:ok, conn}
   end

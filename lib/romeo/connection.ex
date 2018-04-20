@@ -134,7 +134,7 @@ defmodule Romeo.Connection do
       {:error, _} = error ->
         {:disconnect, error, conn}
       :unknown ->
-        logger_mod.debug fn ->
+        logger_mod.info fn ->
           [inspect(__MODULE__), ?\s, inspect(self()), " received message: " | inspect(info)]
         end
         {:noreply, conn}
